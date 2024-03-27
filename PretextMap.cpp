@@ -1944,6 +1944,7 @@ MainArgs
                                                         --mapq {10}
                                                         --filterInclude "seq_ [, seq_]*"
                                                         --filterExclude "seq_ [, seq_]*")
+                                                        --memory {3}
                                                         {--highRes}
   (< samfile, pairsfile))help");
         
@@ -1969,6 +1970,7 @@ MainArgs
     
     u08 highRes = 0;
     u32 outputNameGiven = 0;
+    u64 workingSetBytes = 0;
     const char *filterIncludeString = 0;
     const char *filterExcludeString = 0;
     for (   u32 index = 1;
@@ -2043,6 +2045,18 @@ MainArgs
             ++index;
             filterExcludeString = ArgBuffer[index];
         }
+        else if (AreNullTerminatedStringsEqual((u08 *)ArgBuffer[index], (u08 *)"--memory"))
+        {
+            ++index;
+            u32 bufGb;
+            if (!StringToInt_Check((u08 *)ArgBuffer[index], &bufGb) || !bufGb)
+            {
+                PrintError("Cannot parse memory option \'%s\' (positive integer required)", ArgBuffer[index]);
+            } else
+            {
+                workingSetBytes = GigaByte((u64) bufGb);
+            }
+        }
         else if (AreNullTerminatedStringsEqual((u08 *)ArgBuffer[index], (u08 *)"--highRes"))
         {
             highRes = 1;
@@ -2055,9 +2069,14 @@ MainArgs
         exit(EXIT_FAILURE);
     }
 
+    if (!workingSetBytes)
+    {
+        workingSetBytes = GigaByte((u64)(highRes ? 16 : 3));
+    }
+
     InitialiseMutex(Working_Set_rwMutex);
 
-    CreateMemoryArena(Working_Set, GigaByte((u64)(highRes ? 16 : 3)));
+    CreateMemoryArena(Working_Set, workingSetBytes);
     Thread_Pool = ThreadPoolInit(&Working_Set, 3);
 
     if (highRes)
